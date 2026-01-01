@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Change to project directory
-cd /home/kiang/public_html/godroad
+# Get project root directory (parent of scripts/)
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Run the crawler
 /usr/bin/php crawler.php
