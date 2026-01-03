@@ -181,8 +181,8 @@
 
         // Initialize map
         const map = L.map('map').setView([23.317218750842, 120.33528294276], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
+            attribution: '&copy; 內政部國土測繪中心'
         }).addTo(map);
 
         // Draw route polyline

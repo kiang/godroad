@@ -538,8 +538,8 @@ class SummaryBuilder
 
         // Initialize map
         const map = L.map('map').setView([{$centerLat}, {$centerLng}], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+        L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
+            attribution: '&copy; 內政部國土測繪中心'
         }).addTo(map);
 
         // Draw route polyline
