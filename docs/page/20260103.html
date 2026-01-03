@@ -90,6 +90,10 @@
             width: 20px;
             text-align: center;
         }
+        .custom-marker {
+            background: transparent !important;
+            border: none !important;
+        }
     </style>
 </head>
 <body>
@@ -128,17 +132,27 @@
 
         // Draw route polyline
         const routeCoords = points.map(p => [p.lat, p.lng]);
-        const polyline = L.polyline(routeCoords, { color: '#3498db', weight: 3, opacity: 0.7 }).addTo(map);
+        const polyline = L.polyline(routeCoords, { color: '#3498db', weight: 5, opacity: 0.8 }).addTo(map);
         map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
 
         // Add markers for start and end
         if (points.length > 0) {
             L.marker([points[0].lat, points[0].lng], {
-                icon: L.divIcon({ className: 'start-marker', html: '<div style="background:#27ae60;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">起點</div>' })
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#27ae60;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">起點</div>',
+                    iconSize: null,
+                    iconAnchor: [25, 20]
+                })
             }).addTo(map);
 
             L.marker([points[points.length - 1].lat, points[points.length - 1].lng], {
-                icon: L.divIcon({ className: 'end-marker', html: '<div style="background:#9b59b6;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">終點</div>' })
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#9b59b6;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">終點</div>',
+                    iconSize: null,
+                    iconAnchor: [25, 20]
+                })
             }).addTo(map);
         }
 
