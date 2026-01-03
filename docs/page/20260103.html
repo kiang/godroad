@@ -98,17 +98,17 @@
         <div class="meta">前導車 | 2026-01-03</div>
     </div>
     <div class="stats">
-        <div class="stat-item">Records: <span id="totalRecords">0</span></div>
-        <div class="stat-item">Distance: <span>62.76 km</span></div>
-        <div class="stat-item">First: <span id="firstTime">-</span></div>
-        <div class="stat-item">Last: <span id="lastTime">-</span></div>
-        <div class="stat-item rest">Rest stops: <span>16</span></div>
-        <div class="stat-item warning">Speed anomalies: <span>0</span></div>
+        <div class="stat-item">紀錄數：<span id="totalRecords">0</span></div>
+        <div class="stat-item">總距離：<span>62.76 公里</span></div>
+        <div class="stat-item">起始時間：<span id="firstTime">-</span></div>
+        <div class="stat-item">結束時間：<span id="lastTime">-</span></div>
+        <div class="stat-item rest">休息次數：<span>16</span></div>
+        <div class="stat-item warning">速度異常：<span>0</span></div>
     </div>
     <div class="legend">
-        <div class="legend-item"><div class="legend-dot normal"></div> Normal</div>
-        <div class="legend-item"><div class="legend-dot rest"></div> Rest stop</div>
-        <div class="legend-item"><div class="legend-dot anomaly"></div> Speed anomaly (&gt;50 km/h)</div>
+        <div class="legend-item"><div class="legend-dot normal"></div> 正常</div>
+        <div class="legend-item"><div class="legend-dot rest"></div> 休息</div>
+        <div class="legend-item"><div class="legend-dot anomaly"></div> 速度異常 (&gt;50 km/h)</div>
     </div>
     <div id="map"></div>
     <div class="timeline" id="timeline"></div>
@@ -134,11 +134,11 @@
         // Add markers for start and end
         if (points.length > 0) {
             L.marker([points[0].lat, points[0].lng], {
-                icon: L.divIcon({ className: 'start-marker', html: '<div style="background:#27ae60;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">Start</div>' })
+                icon: L.divIcon({ className: 'start-marker', html: '<div style="background:#27ae60;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">起點</div>' })
             }).addTo(map);
 
             L.marker([points[points.length - 1].lat, points[points.length - 1].lng], {
-                icon: L.divIcon({ className: 'end-marker', html: '<div style="background:#9b59b6;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">End</div>' })
+                icon: L.divIcon({ className: 'end-marker', html: '<div style="background:#9b59b6;color:white;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;">終點</div>' })
             }).addTo(map);
         }
 
@@ -146,14 +146,14 @@
         restStops.forEach(stop => {
             L.circleMarker([stop.lat, stop.lng], {
                 radius: 8, fillColor: '#f39c12', color: '#fff', weight: 2, fillOpacity: 0.9
-            }).addTo(map).bindPopup('<b>Rest Stop</b><br>' + stop.time + '<br>' + stop.addr);
+            }).addTo(map).bindPopup('<b>休息站</b><br>' + stop.time + '<br>' + stop.addr);
         });
 
         // Add speed anomaly markers
         speedAnomalies.forEach(anomaly => {
             L.circleMarker([anomaly.lat, anomaly.lng], {
                 radius: 8, fillColor: '#e74c3c', color: '#fff', weight: 2, fillOpacity: 0.9
-            }).addTo(map).bindPopup('<b>Speed Anomaly</b><br>' + anomaly.time + '<br>' + anomaly.speed + ' km/h');
+            }).addTo(map).bindPopup('<b>速度異常</b><br>' + anomaly.time + '<br>' + anomaly.speed + ' km/h');
         });
 
         // Current position marker
@@ -180,7 +180,7 @@
             div.innerHTML = '<span class="timeline-status">' + statusIcon + '</span>' +
                 '<span class="timeline-time">' + timeDisplay + '</span>' +
                 '<span class="timeline-addr">' + item.addr + '</span>' +
-                '<span class="timeline-distance">' + item.distance + 'm</span>' +
+                '<span class="timeline-distance">' + item.distance + ' 公尺</span>' +
                 '<span class="timeline-speed ' + speedClass + '">' + item.speed + ' km/h</span>';
 
             div.addEventListener('click', () => {
@@ -191,7 +191,7 @@
                 const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : '#3498db');
                 currentMarker = L.circleMarker([item.lat, item.lng], {
                     radius: 10, fillColor: markerColor, color: '#fff', weight: 2, fillOpacity: 0.9
-                }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>Speed: ' + item.speed + ' km/h').openPopup();
+                }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>速度：' + item.speed + ' km/h').openPopup();
                 map.setView([item.lat, item.lng], 16);
             });
             timelineEl.appendChild(div);
