@@ -20,18 +20,64 @@
         .header h1 { font-size: 1.2em; margin-bottom: 5px; }
         .header .meta { font-size: 0.9em; opacity: 0.8; }
         .header .title-section { flex: 1; min-width: 200px; }
-        .date-selector {
+        .date-controls {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
+            flex-wrap: wrap;
         }
-        .date-selector label { font-size: 0.9em; }
-        .date-selector select {
+        .date-controls label { font-size: 0.9em; }
+        .date-controls select {
             padding: 8px 12px;
             border-radius: 4px;
             border: none;
             font-size: 0.9em;
             min-width: 150px;
+        }
+        .date-picker-btn {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .date-picker-btn:hover { background: #2980b9; }
+        .date-picker-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 10px;
+            z-index: 1000;
+            display: none;
+            min-width: 250px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .date-picker-dropdown.show { display: block; }
+        .date-picker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            color: #333;
+        }
+        .date-picker-item:hover { background: #f0f0f0; }
+        .date-picker-item label { color: #333; }
+        .date-picker-item input { cursor: pointer; }
+        .date-picker-item .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .date-picker-wrapper {
+            position: relative;
         }
         #map { height: 55vh; width: 100%; }
         .stats {
@@ -52,6 +98,7 @@
             background: #fff;
             border-bottom: 1px solid #ddd;
             font-size: 0.8em;
+            flex-wrap: wrap;
         }
         .legend-item { display: flex; align-items: center; gap: 5px; }
         .legend-dot {
@@ -62,6 +109,21 @@
         .legend-dot.normal { background: #3498db; }
         .legend-dot.rest { background: #f39c12; }
         .legend-dot.anomaly { background: #e74c3c; }
+        .legend-separator {
+            border-left: 1px solid #ddd;
+            margin: 0 5px;
+        }
+        .overlay-legend {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .overlay-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.8em;
+        }
         .timeline {
             max-height: 30vh;
             overflow-y: auto;
@@ -120,6 +182,7 @@
             background: #34495e;
             color: white;
             font-size: 0.9em;
+            flex-wrap: wrap;
         }
         .play-btn, .stop-btn {
             padding: 8px 16px;
@@ -191,11 +254,18 @@
             <h1 id="projectName">GPS 軌跡紀錄</h1>
             <div class="meta" id="metaInfo">請選擇日期</div>
         </div>
-        <div class="date-selector">
-            <label for="dateSelect">選擇日期：</label>
-            <select id="dateSelect">
-                <option value="">載入中...</option>
-            </select>
+        <div class="date-controls">
+            <div class="date-picker-wrapper">
+                <button class="date-picker-btn" id="datePickerBtn">選擇日期 ▼</button>
+                <div class="date-picker-dropdown" id="datePickerDropdown">
+                    <div id="dateList">載入中...</div>
+                </div>
+            </div>
+            <label>主要日期：
+                <select id="majorDateSelect">
+                    <option value="">請先選擇日期</option>
+                </select>
+            </label>
         </div>
     </div>
     <div class="stats">
@@ -210,6 +280,8 @@
         <div class="legend-item"><div class="legend-dot normal"></div> 正常</div>
         <div class="legend-item"><div class="legend-dot rest"></div> 休息</div>
         <div class="legend-item"><div class="legend-dot anomaly"></div> 速度異常 (&gt;50 km/h)</div>
+        <div class="legend-separator"></div>
+        <div class="overlay-legend" id="overlayLegend"></div>
     </div>
     <div class="playback-controls">
         <button id="playBtn" class="play-btn" disabled>▶ 播放</button>
@@ -229,16 +301,31 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // Route colors for different dates
+        const ROUTE_COLORS = [
+            '#3498db', // Blue
+            '#e74c3c', // Red
+            '#27ae60', // Green
+            '#9b59b6', // Purple
+            '#f39c12', // Orange
+            '#1abc9c', // Teal
+            '#e91e63', // Pink
+            '#00bcd4', // Cyan
+        ];
+
         // Global state
         let map = null;
-        let data = null;
-        let polyline = null;
+        let availableDates = [];
+        let selectedDates = [];
+        let majorDate = null;
+        let loadedData = {}; // Cache for loaded data
+        let polylines = {};
+        let overlayMarkers = {};
         let currentMarker = null;
         let highlightedSegment = null;
         let playInterval = null;
         let currentPlayIndex = 0;
         let isPlaying = false;
-        let markers = [];
 
         // Initialize map
         function initMap() {
@@ -248,61 +335,157 @@
             }).addTo(map);
         }
 
+        // Get color for a date
+        function getColorForDate(date) {
+            const index = selectedDates.indexOf(date);
+            return ROUTE_COLORS[index % ROUTE_COLORS.length];
+        }
+
         // Load available dates
         async function loadDates() {
             try {
                 const response = await fetch('data/index.json');
-                const dates = await response.json();
-
-                const select = document.getElementById('dateSelect');
-                select.innerHTML = '';
-
-                if (dates.length === 0) {
-                    select.innerHTML = '<option value="">無可用資料</option>';
-                    return;
-                }
-
-                dates.forEach((item, index) => {
-                    const option = document.createElement('option');
-                    option.value = item.date;
-                    option.textContent = item.date + ' (' + (item.totalDistance / 1000).toFixed(2) + ' km)';
-                    select.appendChild(option);
-                });
-
-                // Load the first date by default
-                if (dates.length > 0) {
-                    loadData(dates[0].date);
-                }
+                availableDates = await response.json();
+                renderDatePicker();
             } catch (error) {
                 console.error('Failed to load dates:', error);
-                document.getElementById('dateSelect').innerHTML = '<option value="">載入失敗</option>';
+                document.getElementById('dateList').innerHTML = '載入失敗';
             }
         }
 
-        // Load data for a specific date
-        async function loadData(date) {
-            if (!date) return;
+        // Render date picker checkboxes
+        function renderDatePicker() {
+            const dateList = document.getElementById('dateList');
+            dateList.innerHTML = '';
 
-            // Show loading state
-            document.getElementById('timeline').innerHTML = '<div class="loading">載入中...</div>';
-            stopPlayback();
+            if (availableDates.length === 0) {
+                dateList.innerHTML = '無可用資料';
+                return;
+            }
 
-            try {
-                const response = await fetch('data/' + date + '.json');
-                data = await response.json();
-                renderData();
-            } catch (error) {
-                console.error('Failed to load data:', error);
-                document.getElementById('timeline').innerHTML = '<div class="no-data">載入失敗</div>';
+            availableDates.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'date-picker-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'date-' + item.date;
+                checkbox.value = item.date;
+                checkbox.addEventListener('change', () => toggleDate(item.date, checkbox.checked));
+
+                const colorDot = document.createElement('div');
+                colorDot.className = 'color-dot';
+                colorDot.id = 'color-' + item.date;
+                colorDot.style.background = '#ccc';
+
+                const label = document.createElement('label');
+                label.htmlFor = 'date-' + item.date;
+                label.textContent = item.date + ' (' + (item.totalDistance / 1000).toFixed(2) + ' km)';
+                label.style.flex = '1';
+                label.style.cursor = 'pointer';
+
+                div.appendChild(checkbox);
+                div.appendChild(colorDot);
+                div.appendChild(label);
+                dateList.appendChild(div);
+            });
+
+            // Auto-select the first date
+            if (availableDates.length > 0) {
+                const firstCheckbox = document.getElementById('date-' + availableDates[0].date);
+                if (firstCheckbox) {
+                    firstCheckbox.checked = true;
+                    toggleDate(availableDates[0].date, true);
+                }
             }
         }
 
-        // Clear map layers
-        function clearMap() {
-            if (polyline) {
-                map.removeLayer(polyline);
-                polyline = null;
+        // Toggle date selection
+        async function toggleDate(date, selected) {
+            if (selected) {
+                if (!selectedDates.includes(date)) {
+                    selectedDates.push(date);
+                }
+            } else {
+                selectedDates = selectedDates.filter(d => d !== date);
             }
+
+            // Update color dots
+            availableDates.forEach(item => {
+                const colorDot = document.getElementById('color-' + item.date);
+                if (colorDot) {
+                    if (selectedDates.includes(item.date)) {
+                        colorDot.style.background = getColorForDate(item.date);
+                    } else {
+                        colorDot.style.background = '#ccc';
+                    }
+                }
+            });
+
+            // Update major date selector
+            updateMajorDateSelector();
+
+            // Load and render data
+            await loadSelectedDates();
+            renderAllRoutes();
+        }
+
+        // Update major date selector
+        function updateMajorDateSelector() {
+            const select = document.getElementById('majorDateSelect');
+            const currentValue = select.value;
+            select.innerHTML = '';
+
+            if (selectedDates.length === 0) {
+                select.innerHTML = '<option value="">請先選擇日期</option>';
+                majorDate = null;
+                return;
+            }
+
+            selectedDates.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = date;
+                option.style.color = getColorForDate(date);
+                select.appendChild(option);
+            });
+
+            // Keep current selection if still valid, otherwise select first
+            if (selectedDates.includes(currentValue)) {
+                select.value = currentValue;
+                majorDate = currentValue;
+            } else {
+                select.value = selectedDates[0];
+                majorDate = selectedDates[0];
+            }
+        }
+
+        // Load data for all selected dates
+        async function loadSelectedDates() {
+            const loadPromises = selectedDates.map(async date => {
+                if (!loadedData[date]) {
+                    try {
+                        const response = await fetch('data/' + date + '.json');
+                        loadedData[date] = await response.json();
+                    } catch (error) {
+                        console.error('Failed to load data for ' + date + ':', error);
+                    }
+                }
+            });
+
+            await Promise.all(loadPromises);
+        }
+
+        // Clear all map layers
+        function clearAllLayers() {
+            Object.values(polylines).forEach(p => map.removeLayer(p));
+            polylines = {};
+
+            Object.values(overlayMarkers).forEach(markers => {
+                markers.forEach(m => map.removeLayer(m));
+            });
+            overlayMarkers = {};
+
             if (currentMarker) {
                 map.removeLayer(currentMarker);
                 currentMarker = null;
@@ -311,40 +494,74 @@
                 map.removeLayer(highlightedSegment);
                 highlightedSegment = null;
             }
-            markers.forEach(m => map.removeLayer(m));
-            markers = [];
         }
 
-        // Render data on the map and timeline
-        function renderData() {
-            if (!data) return;
+        // Render all selected routes
+        function renderAllRoutes() {
+            stopPlayback();
+            clearAllLayers();
 
-            clearMap();
-
-            // Update header
-            document.getElementById('projectName').textContent = data.projectName || 'GPS 軌跡紀錄';
-            document.getElementById('metaInfo').textContent = (data.dotName || '') + ' | ' + data.date;
-
-            // Update stats
-            document.getElementById('totalRecords').textContent = data.timeline.length;
-            document.getElementById('totalDistance').textContent = data.totalDistanceKm + ' 公里';
-            document.getElementById('restCount').textContent = data.restCount;
-            document.getElementById('anomalyCount').textContent = data.anomalyCount;
-            document.getElementById('totalPoints').textContent = data.timeline.length;
-
-            if (data.timeline.length > 0) {
-                document.getElementById('firstTime').textContent = data.timeline[0].time;
-                document.getElementById('lastTime').textContent = data.timeline[data.timeline.length - 1].time;
+            if (selectedDates.length === 0) {
+                document.getElementById('timeline').innerHTML = '<div class="no-data">請選擇日期</div>';
+                updateStats(null);
+                updateOverlayLegend();
+                return;
             }
 
-            // Enable playback controls
-            document.getElementById('playBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = false;
+            const allBounds = [];
 
-            // Draw route polyline
-            const routeCoords = data.points.map(p => [p.lat, p.lng]);
-            polyline = L.polyline(routeCoords, { color: '#3498db', weight: 5, opacity: 0.8 }).addTo(map);
-            map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+            // Draw all routes
+            selectedDates.forEach((date, index) => {
+                const data = loadedData[date];
+                if (!data || !data.points || data.points.length === 0) return;
+
+                const color = getColorForDate(date);
+                const isMajor = date === majorDate;
+                const weight = isMajor ? 5 : 3;
+                const opacity = isMajor ? 0.9 : 0.6;
+
+                // Draw route polyline
+                const routeCoords = data.points.map(p => [p.lat, p.lng]);
+                const polyline = L.polyline(routeCoords, {
+                    color: color,
+                    weight: weight,
+                    opacity: opacity
+                }).addTo(map);
+                polylines[date] = polyline;
+                allBounds.push(polyline.getBounds());
+
+                // Store markers for this date
+                overlayMarkers[date] = [];
+
+                // Only add detailed markers for major date
+                if (isMajor) {
+                    addMajorDateMarkers(data, color);
+                } else {
+                    // Add simple start/end markers for overlay dates
+                    addOverlayMarkers(data, date, color);
+                }
+            });
+
+            // Fit map to show all routes
+            if (allBounds.length > 0) {
+                const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
+                map.fitBounds(combinedBounds, { padding: [20, 20] });
+            }
+
+            // Update UI for major date
+            const majorData = loadedData[majorDate];
+            updateStats(majorData);
+            renderTimeline(majorData);
+            updateOverlayLegend();
+
+            // Enable playback controls
+            document.getElementById('playBtn').disabled = !majorData;
+            document.getElementById('stopBtn').disabled = !majorData;
+        }
+
+        // Add detailed markers for major date
+        function addMajorDateMarkers(data, color) {
+            const markers = overlayMarkers[majorDate];
 
             // Add segment distance labels
             data.segments.forEach((seg, index) => {
@@ -353,7 +570,7 @@
                 const fromIdx = seg.fromPointIndex;
                 const toIdx = seg.toPointIndex;
 
-                // Create segment polyline
+                // Create segment polyline for highlighting
                 const segmentCoords = data.points.slice(fromIdx, toIdx + 1).map(p => [p.lat, p.lng]);
                 const segmentLine = L.polyline(segmentCoords, {
                     color: '#e74c3c',
@@ -387,6 +604,7 @@
             });
 
             // Click on map to clear highlight
+            map.off('click');
             map.on('click', function(e) {
                 if (highlightedSegment && !e.originalEvent.target.closest('.segment-label')) {
                     map.removeLayer(highlightedSegment);
@@ -432,15 +650,83 @@
                 }).addTo(map).bindPopup('<b>速度異常</b><br>' + anomaly.time + '<br>' + anomaly.speed + ' km/h');
                 markers.push(marker);
             });
+        }
 
-            // Render timeline
-            renderTimeline();
+        // Add simple markers for overlay dates
+        function addOverlayMarkers(data, date, color) {
+            const markers = overlayMarkers[date] || [];
+            overlayMarkers[date] = markers;
+
+            if (data.points.length > 0) {
+                // Start marker
+                const startMarker = L.circleMarker([data.points[0].lat, data.points[0].lng], {
+                    radius: 8, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9
+                }).addTo(map).bindPopup('<b>' + date + '</b><br>起點');
+                markers.push(startMarker);
+
+                // End marker
+                const endMarker = L.circleMarker(
+                    [data.points[data.points.length - 1].lat, data.points[data.points.length - 1].lng],
+                    { radius: 8, fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.9 }
+                ).addTo(map).bindPopup('<b>' + date + '</b><br>終點<br>' + data.totalDistanceKm + ' km');
+                markers.push(endMarker);
+            }
+        }
+
+        // Update stats display
+        function updateStats(data) {
+            if (!data) {
+                document.getElementById('projectName').textContent = 'GPS 軌跡紀錄';
+                document.getElementById('metaInfo').textContent = '請選擇日期';
+                document.getElementById('totalRecords').textContent = '-';
+                document.getElementById('totalDistance').textContent = '-';
+                document.getElementById('firstTime').textContent = '-';
+                document.getElementById('lastTime').textContent = '-';
+                document.getElementById('restCount').textContent = '-';
+                document.getElementById('anomalyCount').textContent = '-';
+                document.getElementById('totalPoints').textContent = '0';
+                return;
+            }
+
+            document.getElementById('projectName').textContent = data.projectName || 'GPS 軌跡紀錄';
+            document.getElementById('metaInfo').textContent = (data.dotName || '') + ' | ' + data.date;
+            document.getElementById('totalRecords').textContent = data.timeline.length;
+            document.getElementById('totalDistance').textContent = data.totalDistanceKm + ' 公里';
+            document.getElementById('restCount').textContent = data.restCount;
+            document.getElementById('anomalyCount').textContent = data.anomalyCount;
+            document.getElementById('totalPoints').textContent = data.timeline.length;
+
+            if (data.timeline.length > 0) {
+                document.getElementById('firstTime').textContent = data.timeline[0].time;
+                document.getElementById('lastTime').textContent = data.timeline[data.timeline.length - 1].time;
+            }
+        }
+
+        // Update overlay legend
+        function updateOverlayLegend() {
+            const legend = document.getElementById('overlayLegend');
+            legend.innerHTML = '';
+
+            if (selectedDates.length <= 1) return;
+
+            selectedDates.forEach(date => {
+                const color = getColorForDate(date);
+                const item = document.createElement('div');
+                item.className = 'overlay-legend-item';
+                item.innerHTML = '<div class="legend-dot" style="background:' + color + '"></div> ' + date;
+                legend.appendChild(item);
+            });
         }
 
         // Render timeline list
-        function renderTimeline() {
+        function renderTimeline(data) {
             const timelineEl = document.getElementById('timeline');
             timelineEl.innerHTML = '';
+
+            if (!data || !data.timeline || data.timeline.length === 0) {
+                timelineEl.innerHTML = '<div class="no-data">無資料</div>';
+                return;
+            }
 
             data.timeline.forEach((item, index) => {
                 const div = document.createElement('div');
@@ -474,6 +760,7 @@
 
         // Show a specific point on the map
         function showPoint(index) {
+            const data = loadedData[majorDate];
             if (!data || index < 0 || index >= data.timeline.length) return;
 
             const item = data.timeline[index];
@@ -490,7 +777,7 @@
 
             // Update map marker
             if (currentMarker) map.removeLayer(currentMarker);
-            const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : '#3498db');
+            const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : getColorForDate(majorDate));
             currentMarker = L.circleMarker([item.lat, item.lng], {
                 radius: 12, fillColor: markerColor, color: '#fff', weight: 3, fillOpacity: 0.9
             }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>速度：' + item.speed + ' km/h');
@@ -500,6 +787,7 @@
 
         // Playback functions
         function startPlayback() {
+            const data = loadedData[majorDate];
             if (!data) return;
 
             if (isPlaying) {
@@ -515,7 +803,8 @@
                 document.getElementById('playBtn').classList.add('playing');
 
                 playInterval = setInterval(() => {
-                    if (currentPlayIndex >= data.timeline.length - 1) {
+                    const data = loadedData[majorDate];
+                    if (!data || currentPlayIndex >= data.timeline.length - 1) {
                         stopPlayback();
                         return;
                     }
@@ -536,14 +825,30 @@
                 currentMarker = null;
             }
             document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
-            if (polyline) {
-                map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+
+            // Fit to show all routes
+            const allBounds = Object.values(polylines).map(p => p.getBounds());
+            if (allBounds.length > 0) {
+                const combinedBounds = allBounds.reduce((acc, bounds) => acc.extend(bounds));
+                map.fitBounds(combinedBounds, { padding: [20, 20] });
             }
         }
 
         // Event listeners
-        document.getElementById('dateSelect').addEventListener('change', function() {
-            loadData(this.value);
+        document.getElementById('datePickerBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('datePickerDropdown').classList.toggle('show');
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.date-picker-wrapper')) {
+                document.getElementById('datePickerDropdown').classList.remove('show');
+            }
+        });
+
+        document.getElementById('majorDateSelect').addEventListener('change', function() {
+            majorDate = this.value;
+            renderAllRoutes();
         });
 
         document.getElementById('playBtn').addEventListener('click', startPlayback);
@@ -553,7 +858,8 @@
             if (isPlaying) {
                 clearInterval(playInterval);
                 playInterval = setInterval(() => {
-                    if (currentPlayIndex >= data.timeline.length - 1) {
+                    const data = loadedData[majorDate];
+                    if (!data || currentPlayIndex >= data.timeline.length - 1) {
                         stopPlayback();
                         return;
                     }
