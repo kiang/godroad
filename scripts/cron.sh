@@ -7,6 +7,9 @@ cd "$PROJECT_ROOT"
 # Run the crawler
 /usr/bin/php crawler.php
 
+# Pull latest changes first
+git pull --rebase
+
 # Check if there are any changes in docs/
 if [[ -n $(git status docs/ --porcelain) ]]; then
     # Add all changes in docs/
