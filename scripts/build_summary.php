@@ -168,10 +168,11 @@ class SummaryBuilder
                 continue;
             }
 
-            $prevRecord = $records[$i - 1];
             $currRecord = $records[$i];
 
-            $prevPoint = $prevRecord['data']['GPS'][0] ?? null;
+            // Compare to the LAST MERGED point, not the previous original record
+            $lastMerged = $merged[count($merged) - 1];
+            $prevPoint = $lastMerged['data']['GPS'][0] ?? null;
             $currPoint = $currRecord['data']['GPS'][0] ?? null;
 
             if (!$prevPoint || !$currPoint) {
@@ -306,10 +307,12 @@ class SummaryBuilder
                             $isResting = true;
                             $currentRestStart = [
                                 'index' => $index,
+                                'pointIndex' => count($allPoints),  // Index in allPoints array
                                 'time' => $record['time'],
                                 'lat' => $firstPoint['lat'],
                                 'lng' => $firstPoint['lng'],
                                 'addr' => $record['data']['addr'] ?? '',
+                                'cumulativeDistance' => $totalDistance,
                             ];
                             $restStops[] = $currentRestStart;
                         }
@@ -345,6 +348,56 @@ class SummaryBuilder
         // Calculate map center
         $centerLat = array_sum(array_column($allPoints, 'lat')) / count($allPoints);
         $centerLng = array_sum(array_column($allPoints, 'lng')) / count($allPoints);
+
+        // Calculate segments between start, rest stops, and end
+        $segments = [];
+        $startTime = $timeline[0]['time'] ?? '';
+        $endTime = $timeline[count($timeline) - 1]['time'] ?? '';
+        $startAddr = $timeline[0]['addr'] ?? '';
+        $endAddr = $timeline[count($timeline) - 1]['addr'] ?? '';
+        $totalPoints = count($allPoints);
+
+        $prevDistance = 0;
+        $prevName = '起點';
+        $prevTime = $startTime;
+        $prevAddr = $startAddr;
+        $prevPointIndex = 0;
+
+        foreach ($restStops as $i => $stop) {
+            $segmentDistance = ($stop['cumulativeDistance'] - $prevDistance) / 1000;
+            $segments[] = [
+                'from' => $prevName,
+                'fromTime' => $prevTime,
+                'fromAddr' => $prevAddr,
+                'fromPointIndex' => $prevPointIndex,
+                'to' => '休息 ' . ($i + 1),
+                'toTime' => $stop['time'],
+                'toAddr' => $stop['addr'],
+                'toPointIndex' => $stop['pointIndex'],
+                'distance' => round($segmentDistance, 2),
+            ];
+            $prevDistance = $stop['cumulativeDistance'];
+            $prevName = '休息 ' . ($i + 1);
+            $prevTime = $stop['time'];
+            $prevAddr = $stop['addr'];
+            $prevPointIndex = $stop['pointIndex'];
+        }
+
+        // Add final segment to end
+        $finalSegmentDistance = ($totalDistance - $prevDistance) / 1000;
+        $segments[] = [
+            'from' => $prevName,
+            'fromTime' => $prevTime,
+            'fromAddr' => $prevAddr,
+            'fromPointIndex' => $prevPointIndex,
+            'to' => '終點',
+            'toTime' => $endTime,
+            'toAddr' => $endAddr,
+            'toPointIndex' => $totalPoints - 1,
+            'distance' => round($finalSegmentDistance, 2),
+        ];
+
+        $segmentsJson = json_encode($segments, JSON_UNESCAPED_UNICODE);
 
         $pointsJson = json_encode($allPoints);
         $timelineJson = json_encode($timeline, JSON_UNESCAPED_UNICODE);
@@ -495,6 +548,16 @@ class SummaryBuilder
         .progress-text {
             margin-left: auto;
         }
+        .segment-label {
+            background: rgba(52, 73, 94, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body>
@@ -535,6 +598,7 @@ class SummaryBuilder
         const timeline = {$timelineJson};
         const restStops = {$restStopsJson};
         const speedAnomalies = {$speedAnomaliesJson};
+        const segments = {$segmentsJson};
 
         // Initialize map
         const map = L.map('map').setView([{$centerLat}, {$centerLng}], 13);
@@ -546,6 +610,63 @@ class SummaryBuilder
         const routeCoords = points.map(p => [p.lat, p.lng]);
         const polyline = L.polyline(routeCoords, { color: '#3498db', weight: 5, opacity: 0.8 }).addTo(map);
         map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+
+        // Add segment distance labels on the map
+        let highlightedSegment = null;
+        const segmentPolylines = [];
+
+        segments.forEach((seg, index) => {
+            if (seg.distance < 0.1) return; // Skip very short segments
+
+            const fromIdx = seg.fromPointIndex;
+            const toIdx = seg.toPointIndex;
+
+            // Create segment polyline (hidden by default, shown when clicked)
+            const segmentCoords = points.slice(fromIdx, toIdx + 1).map(p => [p.lat, p.lng]);
+            const segmentLine = L.polyline(segmentCoords, {
+                color: '#e74c3c',
+                weight: 8,
+                opacity: 0.8
+            });
+            segmentPolylines.push({ line: segmentLine, index: index });
+
+            // Find midpoint of segment
+            const midIdx = Math.floor((fromIdx + toIdx) / 2);
+
+            if (midIdx >= 0 && midIdx < points.length) {
+                const midPoint = points[midIdx];
+                const marker = L.marker([midPoint.lat, midPoint.lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div class="segment-label" style="cursor:pointer;" data-segment="' + index + '">' + seg.distance + ' km</div>',
+                        iconSize: null,
+                        iconAnchor: [30, 10]
+                    })
+                }).addTo(map);
+
+                marker.on('click', function() {
+                    // Remove previous highlight
+                    if (highlightedSegment) {
+                        map.removeLayer(highlightedSegment);
+                    }
+
+                    // Add new highlight
+                    segmentLine.addTo(map);
+                    highlightedSegment = segmentLine;
+
+                    // Fit map to segment bounds
+                    map.fitBounds(segmentLine.getBounds(), { padding: [50, 50] });
+                });
+            }
+        });
+
+        // Click on map to clear highlight
+        map.on('click', function(e) {
+            if (highlightedSegment && !e.originalEvent.target.closest('.segment-label')) {
+                map.removeLayer(highlightedSegment);
+                highlightedSegment = null;
+            }
+        });
 
         // Add markers for start and end
         if (points.length > 0) {
