@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS 軌跡紀錄</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .header h1 { font-size: 1.2em; margin-bottom: 5px; }
+        .header .meta { font-size: 0.9em; opacity: 0.8; }
+        .header .title-section { flex: 1; min-width: 200px; }
+        .date-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .date-selector label { font-size: 0.9em; }
+        .date-selector select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            font-size: 0.9em;
+            min-width: 150px;
+        }
+        #map { height: 55vh; width: 100%; }
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 10px 20px;
+            background: #ecf0f1;
+            font-size: 0.85em;
+        }
+        .stat-item span { font-weight: bold; color: #2c3e50; }
+        .stat-item.warning span { color: #e74c3c; }
+        .stat-item.rest span { color: #f39c12; }
+        .legend {
+            display: flex;
+            gap: 15px;
+            padding: 8px 20px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            font-size: 0.8em;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .legend-dot.normal { background: #3498db; }
+        .legend-dot.rest { background: #f39c12; }
+        .legend-dot.anomaly { background: #e74c3c; }
+        .timeline {
+            max-height: 30vh;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f5f5f5;
+        }
+        .timeline-item {
+            display: flex;
+            padding: 8px 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            transition: background 0.2s;
+            align-items: center;
+        }
+        .timeline-item:hover { background: #e0e0e0; }
+        .timeline-item.active { background: #d4edda; }
+        .timeline-item.rest { background: #fef9e7; border-left: 3px solid #f39c12; }
+        .timeline-item.speed_anomaly { background: #fdedec; border-left: 3px solid #e74c3c; }
+        .timeline-time {
+            font-weight: bold;
+            min-width: 70px;
+            color: #2c3e50;
+            font-size: 0.85em;
+        }
+        .timeline-addr {
+            flex: 1;
+            color: #555;
+            font-size: 0.9em;
+        }
+        .timeline-speed {
+            width: 70px;
+            text-align: right;
+            color: #888;
+            font-size: 0.85em;
+        }
+        .timeline-speed.high { color: #e74c3c; font-weight: bold; }
+        .timeline-distance {
+            width: 60px;
+            text-align: right;
+            color: #888;
+            font-size: 0.85em;
+        }
+        .timeline-status {
+            width: 20px;
+            text-align: center;
+        }
+        .custom-marker {
+            background: transparent !important;
+            border: none !important;
+        }
+        .playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 10px 20px;
+            background: #34495e;
+            color: white;
+            font-size: 0.9em;
+        }
+        .play-btn, .stop-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .play-btn {
+            background: #27ae60;
+            color: white;
+        }
+        .play-btn:hover { background: #2ecc71; }
+        .play-btn.playing {
+            background: #f39c12;
+        }
+        .play-btn.playing:hover { background: #e67e22; }
+        .stop-btn {
+            background: #e74c3c;
+            color: white;
+        }
+        .stop-btn:hover { background: #c0392b; }
+        .playback-controls select {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: none;
+        }
+        .playback-controls label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .progress-text {
+            margin-left: auto;
+        }
+        .segment-label {
+            background: rgba(52, 73, 94, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        .no-data {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            font-size: 1.1em;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title-section">
+            <h1 id="projectName">GPS 軌跡紀錄</h1>
+            <div class="meta" id="metaInfo">請選擇日期</div>
+        </div>
+        <div class="date-selector">
+            <label for="dateSelect">選擇日期：</label>
+            <select id="dateSelect">
+                <option value="">載入中...</option>
+            </select>
+        </div>
+    </div>
+    <div class="stats">
+        <div class="stat-item">紀錄數：<span id="totalRecords">-</span></div>
+        <div class="stat-item">總距離：<span id="totalDistance">-</span></div>
+        <div class="stat-item">起始時間：<span id="firstTime">-</span></div>
+        <div class="stat-item">結束時間：<span id="lastTime">-</span></div>
+        <div class="stat-item rest">休息次數：<span id="restCount">-</span></div>
+        <div class="stat-item warning">速度異常：<span id="anomalyCount">-</span></div>
+    </div>
+    <div class="legend">
+        <div class="legend-item"><div class="legend-dot normal"></div> 正常</div>
+        <div class="legend-item"><div class="legend-dot rest"></div> 休息</div>
+        <div class="legend-item"><div class="legend-dot anomaly"></div> 速度異常 (&gt;50 km/h)</div>
+    </div>
+    <div class="playback-controls">
+        <button id="playBtn" class="play-btn" disabled>▶ 播放</button>
+        <button id="stopBtn" class="stop-btn" disabled>⏹ 停止</button>
+        <label>速度：<select id="playSpeed">
+            <option value="1000">1x</option>
+            <option value="500" selected>2x</option>
+            <option value="250">4x</option>
+            <option value="100">10x</option>
+        </select></label>
+        <span class="progress-text">進度：<span id="currentIndex">0</span> / <span id="totalPoints">0</span></span>
+    </div>
+    <div id="map"></div>
+    <div class="timeline" id="timeline">
+        <div class="loading">載入中...</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Global state
+        let map = null;
+        let data = null;
+        let polyline = null;
+        let currentMarker = null;
+        let highlightedSegment = null;
+        let playInterval = null;
+        let currentPlayIndex = 0;
+        let isPlaying = false;
+        let markers = [];
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([23.5, 120.5], 8);
+            L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
+                attribution: '&copy; 內政部國土測繪中心'
+            }).addTo(map);
+        }
+
+        // Load available dates
+        async function loadDates() {
+            try {
+                const response = await fetch('data/index.json');
+                const dates = await response.json();
+
+                const select = document.getElementById('dateSelect');
+                select.innerHTML = '';
+
+                if (dates.length === 0) {
+                    select.innerHTML = '<option value="">無可用資料</option>';
+                    return;
+                }
+
+                dates.forEach((item, index) => {
+                    const option = document.createElement('option');
+                    option.value = item.date;
+                    option.textContent = item.date + ' (' + (item.totalDistance / 1000).toFixed(2) + ' km)';
+                    select.appendChild(option);
+                });
+
+                // Load the first date by default
+                if (dates.length > 0) {
+                    loadData(dates[0].date);
+                }
+            } catch (error) {
+                console.error('Failed to load dates:', error);
+                document.getElementById('dateSelect').innerHTML = '<option value="">載入失敗</option>';
+            }
+        }
+
+        // Load data for a specific date
+        async function loadData(date) {
+            if (!date) return;
+
+            // Show loading state
+            document.getElementById('timeline').innerHTML = '<div class="loading">載入中...</div>';
+            stopPlayback();
+
+            try {
+                const response = await fetch('data/' + date + '.json');
+                data = await response.json();
+                renderData();
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                document.getElementById('timeline').innerHTML = '<div class="no-data">載入失敗</div>';
+            }
+        }
+
+        // Clear map layers
+        function clearMap() {
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            if (highlightedSegment) {
+                map.removeLayer(highlightedSegment);
+                highlightedSegment = null;
+            }
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+        }
+
+        // Render data on the map and timeline
+        function renderData() {
+            if (!data) return;
+
+            clearMap();
+
+            // Update header
+            document.getElementById('projectName').textContent = data.projectName || 'GPS 軌跡紀錄';
+            document.getElementById('metaInfo').textContent = (data.dotName || '') + ' | ' + data.date;
+
+            // Update stats
+            document.getElementById('totalRecords').textContent = data.timeline.length;
+            document.getElementById('totalDistance').textContent = data.totalDistanceKm + ' 公里';
+            document.getElementById('restCount').textContent = data.restCount;
+            document.getElementById('anomalyCount').textContent = data.anomalyCount;
+            document.getElementById('totalPoints').textContent = data.timeline.length;
+
+            if (data.timeline.length > 0) {
+                document.getElementById('firstTime').textContent = data.timeline[0].time;
+                document.getElementById('lastTime').textContent = data.timeline[data.timeline.length - 1].time;
+            }
+
+            // Enable playback controls
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = false;
+
+            // Draw route polyline
+            const routeCoords = data.points.map(p => [p.lat, p.lng]);
+            polyline = L.polyline(routeCoords, { color: '#3498db', weight: 5, opacity: 0.8 }).addTo(map);
+            map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+
+            // Add segment distance labels
+            data.segments.forEach((seg, index) => {
+                if (seg.distance < 0.1) return;
+
+                const fromIdx = seg.fromPointIndex;
+                const toIdx = seg.toPointIndex;
+
+                // Create segment polyline
+                const segmentCoords = data.points.slice(fromIdx, toIdx + 1).map(p => [p.lat, p.lng]);
+                const segmentLine = L.polyline(segmentCoords, {
+                    color: '#e74c3c',
+                    weight: 8,
+                    opacity: 0.8
+                });
+
+                // Find midpoint
+                const midIdx = Math.floor((fromIdx + toIdx) / 2);
+                if (midIdx >= 0 && midIdx < data.points.length) {
+                    const midPoint = data.points[midIdx];
+                    const marker = L.marker([midPoint.lat, midPoint.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: '<div class="segment-label">' + seg.distance + ' km</div>',
+                            iconSize: null,
+                            iconAnchor: [30, 10]
+                        })
+                    }).addTo(map);
+                    markers.push(marker);
+
+                    marker.on('click', function() {
+                        if (highlightedSegment) {
+                            map.removeLayer(highlightedSegment);
+                        }
+                        segmentLine.addTo(map);
+                        highlightedSegment = segmentLine;
+                        map.fitBounds(segmentLine.getBounds(), { padding: [50, 50] });
+                    });
+                }
+            });
+
+            // Click on map to clear highlight
+            map.on('click', function(e) {
+                if (highlightedSegment && !e.originalEvent.target.closest('.segment-label')) {
+                    map.removeLayer(highlightedSegment);
+                    highlightedSegment = null;
+                }
+            });
+
+            // Add start and end markers
+            if (data.points.length > 0) {
+                const startMarker = L.marker([data.points[0].lat, data.points[0].lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="background:#27ae60;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">起點</div>',
+                        iconSize: null,
+                        iconAnchor: [25, 20]
+                    })
+                }).addTo(map);
+                markers.push(startMarker);
+
+                const endMarker = L.marker([data.points[data.points.length - 1].lat, data.points[data.points.length - 1].lng], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="background:#9b59b6;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">終點</div>',
+                        iconSize: null,
+                        iconAnchor: [25, 20]
+                    })
+                }).addTo(map);
+                markers.push(endMarker);
+            }
+
+            // Add rest stop markers
+            data.restStops.forEach(stop => {
+                const marker = L.circleMarker([stop.lat, stop.lng], {
+                    radius: 8, fillColor: '#f39c12', color: '#fff', weight: 2, fillOpacity: 0.9
+                }).addTo(map).bindPopup('<b>休息站</b><br>' + stop.time + '<br>' + stop.addr);
+                markers.push(marker);
+            });
+
+            // Add speed anomaly markers
+            data.speedAnomalies.forEach(anomaly => {
+                const marker = L.circleMarker([anomaly.lat, anomaly.lng], {
+                    radius: 8, fillColor: '#e74c3c', color: '#fff', weight: 2, fillOpacity: 0.9
+                }).addTo(map).bindPopup('<b>速度異常</b><br>' + anomaly.time + '<br>' + anomaly.speed + ' km/h');
+                markers.push(marker);
+            });
+
+            // Render timeline
+            renderTimeline();
+        }
+
+        // Render timeline list
+        function renderTimeline() {
+            const timelineEl = document.getElementById('timeline');
+            timelineEl.innerHTML = '';
+
+            data.timeline.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'timeline-item ' + item.status;
+                div.dataset.index = index;
+
+                let statusIcon = '';
+                if (item.status === 'rest') statusIcon = '<span style="color:#f39c12">&#9679;</span>';
+                else if (item.status === 'speed_anomaly') statusIcon = '<span style="color:#e74c3c">&#9679;</span>';
+
+                const speedClass = item.speed > 50 ? 'high' : '';
+
+                let timeDisplay = item.time;
+                if (item.stationaryUntil) {
+                    timeDisplay = item.time + ' - ' + item.stationaryUntil;
+                }
+
+                div.innerHTML = '<span class="timeline-status">' + statusIcon + '</span>' +
+                    '<span class="timeline-time">' + timeDisplay + '</span>' +
+                    '<span class="timeline-addr">' + item.addr + '</span>' +
+                    '<span class="timeline-distance">' + item.distance + ' 公尺</span>' +
+                    '<span class="timeline-speed ' + speedClass + '">' + item.speed + ' km/h</span>';
+
+                div.addEventListener('click', () => {
+                    showPoint(index);
+                });
+
+                timelineEl.appendChild(div);
+            });
+        }
+
+        // Show a specific point on the map
+        function showPoint(index) {
+            if (!data || index < 0 || index >= data.timeline.length) return;
+
+            const item = data.timeline[index];
+            currentPlayIndex = index;
+            document.getElementById('currentIndex').textContent = index + 1;
+
+            // Update timeline highlight
+            document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
+            const activeItem = document.querySelector('.timeline-item[data-index="' + index + '"]');
+            if (activeItem) {
+                activeItem.classList.add('active');
+                activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            // Update map marker
+            if (currentMarker) map.removeLayer(currentMarker);
+            const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : '#3498db');
+            currentMarker = L.circleMarker([item.lat, item.lng], {
+                radius: 12, fillColor: markerColor, color: '#fff', weight: 3, fillOpacity: 0.9
+            }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>速度：' + item.speed + ' km/h');
+
+            map.setView([item.lat, item.lng], 15);
+        }
+
+        // Playback functions
+        function startPlayback() {
+            if (!data) return;
+
+            if (isPlaying) {
+                // Pause
+                clearInterval(playInterval);
+                isPlaying = false;
+                document.getElementById('playBtn').textContent = '▶ 播放';
+                document.getElementById('playBtn').classList.remove('playing');
+            } else {
+                // Play
+                isPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸ 暫停';
+                document.getElementById('playBtn').classList.add('playing');
+
+                playInterval = setInterval(() => {
+                    if (currentPlayIndex >= data.timeline.length - 1) {
+                        stopPlayback();
+                        return;
+                    }
+                    showPoint(currentPlayIndex + 1);
+                }, parseInt(document.getElementById('playSpeed').value));
+            }
+        }
+
+        function stopPlayback() {
+            clearInterval(playInterval);
+            isPlaying = false;
+            currentPlayIndex = 0;
+            document.getElementById('currentIndex').textContent = 0;
+            document.getElementById('playBtn').textContent = '▶ 播放';
+            document.getElementById('playBtn').classList.remove('playing');
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
+            if (polyline) {
+                map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+            }
+        }
+
+        // Event listeners
+        document.getElementById('dateSelect').addEventListener('change', function() {
+            loadData(this.value);
+        });
+
+        document.getElementById('playBtn').addEventListener('click', startPlayback);
+        document.getElementById('stopBtn').addEventListener('click', stopPlayback);
+
+        document.getElementById('playSpeed').addEventListener('change', function() {
+            if (isPlaying) {
+                clearInterval(playInterval);
+                playInterval = setInterval(() => {
+                    if (currentPlayIndex >= data.timeline.length - 1) {
+                        stopPlayback();
+                        return;
+                    }
+                    showPoint(currentPlayIndex + 1);
+                }, parseInt(this.value));
+            }
+        });
+
+        // Initialize
+        initMap();
+        loadDates();
+    </script>
+</body>
+</html>

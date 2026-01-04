@@ -1,8 +1,11 @@
 <?php
 
 /**
- * Build summary HTML page from daily GPS JSON records
- * Usage: php scripts/build_summary.php [YYYYMMDD]
+ * Build summary JSON data from daily GPS JSON records
+ * Usage:
+ *   php scripts/build_summary.php [YYYYMMDD]  - Build specific date
+ *   php scripts/build_summary.php --all       - Build all dates
+ *   php scripts/build_summary.php --index     - Only rebuild index
  */
 
 class SummaryBuilder
@@ -25,6 +28,78 @@ class SummaryBuilder
     public function __construct()
     {
         $this->docsDir = dirname(__DIR__) . '/docs';
+    }
+
+    /**
+     * Build all available dates
+     */
+    public function buildAll(): void
+    {
+        $dates = $this->getAvailableDates();
+        foreach ($dates as $date) {
+            $this->build($date);
+        }
+        $this->buildIndex();
+    }
+
+    /**
+     * Build index file only
+     */
+    public function buildIndex(): void
+    {
+        $dates = $this->getAvailableDates();
+        $index = [];
+
+        foreach ($dates as $date) {
+            $dateFormatted = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2);
+            $dataFile = $this->docsDir . '/data/' . $dateFormatted . '.json';
+
+            if (file_exists($dataFile)) {
+                $data = json_decode(file_get_contents($dataFile), true);
+                $index[] = [
+                    'date' => $dateFormatted,
+                    'projectName' => $data['projectName'] ?? '',
+                    'totalDistance' => $data['totalDistance'] ?? 0,
+                    'recordCount' => count($data['timeline'] ?? []),
+                ];
+            }
+        }
+
+        // Sort by date descending
+        usort($index, fn($a, $b) => strcmp($b['date'], $a['date']));
+
+        $outputDir = $this->docsDir . '/data';
+        if (!is_dir($outputDir)) {
+            mkdir($outputDir, 0755, true);
+        }
+
+        file_put_contents(
+            $outputDir . '/index.json',
+            json_encode($index, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+        );
+
+        echo "Generated index with " . count($index) . " dates\n";
+    }
+
+    /**
+     * Get list of available dates (YYYYMMDD format)
+     */
+    private function getAvailableDates(): array
+    {
+        $dates = [];
+        $dirs = glob($this->docsDir . '/20*-*-*', GLOB_ONLYDIR);
+
+        foreach ($dirs as $dir) {
+            $datePart = basename($dir);
+            // Convert YYYY-MM-DD to YYYYMMDD
+            $date = str_replace('-', '', $datePart);
+            if (preg_match('/^\d{8}$/', $date)) {
+                $dates[] = $date;
+            }
+        }
+
+        sort($dates);
+        return $dates;
     }
 
     public function build(string $date): void
@@ -55,15 +130,18 @@ class SummaryBuilder
         // Merge consecutive points with minimal movement
         $records = $this->mergeStationaryPoints($records);
 
-        $html = $this->generateHtml($date, $dateFormatted, $records);
+        $summaryData = $this->generateSummaryData($date, $dateFormatted, $records);
 
-        $outputDir = $this->docsDir . '/page';
+        $outputDir = $this->docsDir . '/data';
         if (!is_dir($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
 
-        $outputFile = $outputDir . '/' . $date . '.html';
-        file_put_contents($outputFile, $html);
+        $outputFile = $outputDir . '/' . $dateFormatted . '.json';
+        file_put_contents(
+            $outputFile,
+            json_encode($summaryData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+        );
 
         echo "Generated: {$outputFile}\n";
         echo "Total records: " . count($records) . "\n";
@@ -245,7 +323,7 @@ class SummaryBuilder
         return ($h2 * 3600 + $m2 * 60 + $s2) - ($h1 * 3600 + $m1 * 60 + $s1);
     }
 
-    private function generateHtml(string $date, string $dateFormatted, array $records): string
+    private function generateSummaryData(string $date, string $dateFormatted, array $records): array
     {
         $projectName = $records[0]['data']['pjName'] ?? 'GPS Tracking';
         $dotName = $records[0]['data']['dot_name'] ?? '';
@@ -397,451 +475,40 @@ class SummaryBuilder
             'distance' => round($finalSegmentDistance, 2),
         ];
 
-        $segmentsJson = json_encode($segments, JSON_UNESCAPED_UNICODE);
-
-        $pointsJson = json_encode($allPoints);
-        $timelineJson = json_encode($timeline, JSON_UNESCAPED_UNICODE);
-        $restStopsJson = json_encode($restStops, JSON_UNESCAPED_UNICODE);
-        $speedAnomaliesJson = json_encode($speedAnomalies, JSON_UNESCAPED_UNICODE);
-        $totalDistanceKm = round($totalDistance / 1000, 2);
-        $restCount = count($restStops);
-        $anomalyCount = count($speedAnomalies);
-
-        return <<<HTML
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{$projectName} - {$dateFormatted}</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 15px 20px;
-        }
-        .header h1 { font-size: 1.2em; margin-bottom: 5px; }
-        .header .meta { font-size: 0.9em; opacity: 0.8; }
-        #map { height: 55vh; width: 100%; }
-        .stats {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            padding: 10px 20px;
-            background: #ecf0f1;
-            font-size: 0.85em;
-        }
-        .stat-item span { font-weight: bold; color: #2c3e50; }
-        .stat-item.warning span { color: #e74c3c; }
-        .stat-item.rest span { color: #f39c12; }
-        .legend {
-            display: flex;
-            gap: 15px;
-            padding: 8px 20px;
-            background: #fff;
-            border-bottom: 1px solid #ddd;
-            font-size: 0.8em;
-        }
-        .legend-item { display: flex; align-items: center; gap: 5px; }
-        .legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-        .legend-dot.normal { background: #3498db; }
-        .legend-dot.rest { background: #f39c12; }
-        .legend-dot.anomaly { background: #e74c3c; }
-        .timeline {
-            max-height: 30vh;
-            overflow-y: auto;
-            padding: 10px;
-            background: #f5f5f5;
-        }
-        .timeline-item {
-            display: flex;
-            padding: 8px 10px;
-            border-bottom: 1px solid #ddd;
-            cursor: pointer;
-            transition: background 0.2s;
-            align-items: center;
-        }
-        .timeline-item:hover { background: #e0e0e0; }
-        .timeline-item.active { background: #d4edda; }
-        .timeline-item.rest { background: #fef9e7; border-left: 3px solid #f39c12; }
-        .timeline-item.speed_anomaly { background: #fdedec; border-left: 3px solid #e74c3c; }
-        .timeline-time {
-            font-weight: bold;
-            min-width: 70px;
-            color: #2c3e50;
-            font-size: 0.85em;
-        }
-        .timeline-addr {
-            flex: 1;
-            color: #555;
-            font-size: 0.9em;
-        }
-        .timeline-speed {
-            width: 70px;
-            text-align: right;
-            color: #888;
-            font-size: 0.85em;
-        }
-        .timeline-speed.high { color: #e74c3c; font-weight: bold; }
-        .timeline-distance {
-            width: 60px;
-            text-align: right;
-            color: #888;
-            font-size: 0.85em;
-        }
-        .timeline-status {
-            width: 20px;
-            text-align: center;
-        }
-        .custom-marker {
-            background: transparent !important;
-            border: none !important;
-        }
-        .playback-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 10px 20px;
-            background: #34495e;
-            color: white;
-            font-size: 0.9em;
-        }
-        .play-btn, .stop-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-        .play-btn {
-            background: #27ae60;
-            color: white;
-        }
-        .play-btn:hover { background: #2ecc71; }
-        .play-btn.playing {
-            background: #f39c12;
-        }
-        .play-btn.playing:hover { background: #e67e22; }
-        .stop-btn {
-            background: #e74c3c;
-            color: white;
-        }
-        .stop-btn:hover { background: #c0392b; }
-        .playback-controls select {
-            padding: 5px 10px;
-            border-radius: 4px;
-            border: none;
-        }
-        .playback-controls label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .progress-text {
-            margin-left: auto;
-        }
-        .segment-label {
-            background: rgba(52, 73, 94, 0.9);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            white-space: nowrap;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>{$projectName}</h1>
-        <div class="meta">{$dotName} | {$dateFormatted}</div>
-    </div>
-    <div class="stats">
-        <div class="stat-item">紀錄數：<span id="totalRecords">0</span></div>
-        <div class="stat-item">總距離：<span>{$totalDistanceKm} 公里</span></div>
-        <div class="stat-item">起始時間：<span id="firstTime">-</span></div>
-        <div class="stat-item">結束時間：<span id="lastTime">-</span></div>
-        <div class="stat-item rest">休息次數：<span>{$restCount}</span></div>
-        <div class="stat-item warning">速度異常：<span>{$anomalyCount}</span></div>
-    </div>
-    <div class="legend">
-        <div class="legend-item"><div class="legend-dot normal"></div> 正常</div>
-        <div class="legend-item"><div class="legend-dot rest"></div> 休息</div>
-        <div class="legend-item"><div class="legend-dot anomaly"></div> 速度異常 (&gt;50 km/h)</div>
-    </div>
-    <div class="playback-controls">
-        <button id="playBtn" class="play-btn">▶ 播放</button>
-        <button id="stopBtn" class="stop-btn">⏹ 停止</button>
-        <label>速度：<select id="playSpeed">
-            <option value="1000">1x</option>
-            <option value="500" selected>2x</option>
-            <option value="250">4x</option>
-            <option value="100">10x</option>
-        </select></label>
-        <span class="progress-text">進度：<span id="currentIndex">0</span> / <span id="totalPoints">0</span></span>
-    </div>
-    <div id="map"></div>
-    <div class="timeline" id="timeline"></div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const points = {$pointsJson};
-        const timeline = {$timelineJson};
-        const restStops = {$restStopsJson};
-        const speedAnomalies = {$speedAnomaliesJson};
-        const segments = {$segmentsJson};
-
-        // Initialize map
-        const map = L.map('map').setView([{$centerLat}, {$centerLng}], 13);
-        L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
-            attribution: '&copy; 內政部國土測繪中心'
-        }).addTo(map);
-
-        // Draw route polyline
-        const routeCoords = points.map(p => [p.lat, p.lng]);
-        const polyline = L.polyline(routeCoords, { color: '#3498db', weight: 5, opacity: 0.8 }).addTo(map);
-        map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
-
-        // Add segment distance labels on the map
-        let highlightedSegment = null;
-        const segmentPolylines = [];
-
-        segments.forEach((seg, index) => {
-            if (seg.distance < 0.1) return; // Skip very short segments
-
-            const fromIdx = seg.fromPointIndex;
-            const toIdx = seg.toPointIndex;
-
-            // Create segment polyline (hidden by default, shown when clicked)
-            const segmentCoords = points.slice(fromIdx, toIdx + 1).map(p => [p.lat, p.lng]);
-            const segmentLine = L.polyline(segmentCoords, {
-                color: '#e74c3c',
-                weight: 8,
-                opacity: 0.8
-            });
-            segmentPolylines.push({ line: segmentLine, index: index });
-
-            // Find midpoint of segment
-            const midIdx = Math.floor((fromIdx + toIdx) / 2);
-
-            if (midIdx >= 0 && midIdx < points.length) {
-                const midPoint = points[midIdx];
-                const marker = L.marker([midPoint.lat, midPoint.lng], {
-                    icon: L.divIcon({
-                        className: 'custom-marker',
-                        html: '<div class="segment-label" style="cursor:pointer;" data-segment="' + index + '">' + seg.distance + ' km</div>',
-                        iconSize: null,
-                        iconAnchor: [30, 10]
-                    })
-                }).addTo(map);
-
-                marker.on('click', function() {
-                    // Remove previous highlight
-                    if (highlightedSegment) {
-                        map.removeLayer(highlightedSegment);
-                    }
-
-                    // Add new highlight
-                    segmentLine.addTo(map);
-                    highlightedSegment = segmentLine;
-
-                    // Fit map to segment bounds
-                    map.fitBounds(segmentLine.getBounds(), { padding: [50, 50] });
-                });
-            }
-        });
-
-        // Click on map to clear highlight
-        map.on('click', function(e) {
-            if (highlightedSegment && !e.originalEvent.target.closest('.segment-label')) {
-                map.removeLayer(highlightedSegment);
-                highlightedSegment = null;
-            }
-        });
-
-        // Add markers for start and end
-        if (points.length > 0) {
-            L.marker([points[0].lat, points[0].lng], {
-                icon: L.divIcon({
-                    className: 'custom-marker',
-                    html: '<div style="background:#27ae60;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">起點</div>',
-                    iconSize: null,
-                    iconAnchor: [25, 20]
-                })
-            }).addTo(map);
-
-            L.marker([points[points.length - 1].lat, points[points.length - 1].lng], {
-                icon: L.divIcon({
-                    className: 'custom-marker',
-                    html: '<div style="background:#9b59b6;color:white;padding:6px 12px;border-radius:4px;font-size:14px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">終點</div>',
-                    iconSize: null,
-                    iconAnchor: [25, 20]
-                })
-            }).addTo(map);
-        }
-
-        // Add rest stop markers
-        restStops.forEach(stop => {
-            L.circleMarker([stop.lat, stop.lng], {
-                radius: 8, fillColor: '#f39c12', color: '#fff', weight: 2, fillOpacity: 0.9
-            }).addTo(map).bindPopup('<b>休息站</b><br>' + stop.time + '<br>' + stop.addr);
-        });
-
-        // Add speed anomaly markers
-        speedAnomalies.forEach(anomaly => {
-            L.circleMarker([anomaly.lat, anomaly.lng], {
-                radius: 8, fillColor: '#e74c3c', color: '#fff', weight: 2, fillOpacity: 0.9
-            }).addTo(map).bindPopup('<b>速度異常</b><br>' + anomaly.time + '<br>' + anomaly.speed + ' km/h');
-        });
-
-        // Current position marker
-        let currentMarker = null;
-
-        // Render timeline
-        const timelineEl = document.getElementById('timeline');
-        timeline.forEach((item, index) => {
-            const div = document.createElement('div');
-            div.className = 'timeline-item ' + item.status;
-
-            let statusIcon = '';
-            if (item.status === 'rest') statusIcon = '<span style="color:#f39c12">&#9679;</span>';
-            else if (item.status === 'speed_anomaly') statusIcon = '<span style="color:#e74c3c">&#9679;</span>';
-
-            const speedClass = item.speed > 50 ? 'high' : '';
-
-            // Show time range if stationary
-            let timeDisplay = item.time;
-            if (item.stationaryUntil) {
-                timeDisplay = item.time + ' - ' + item.stationaryUntil;
-            }
-
-            div.innerHTML = '<span class="timeline-status">' + statusIcon + '</span>' +
-                '<span class="timeline-time">' + timeDisplay + '</span>' +
-                '<span class="timeline-addr">' + item.addr + '</span>' +
-                '<span class="timeline-distance">' + item.distance + ' 公尺</span>' +
-                '<span class="timeline-speed ' + speedClass + '">' + item.speed + ' km/h</span>';
-
-            div.addEventListener('click', () => {
-                document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
-                div.classList.add('active');
-
-                if (currentMarker) map.removeLayer(currentMarker);
-                const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : '#3498db');
-                currentMarker = L.circleMarker([item.lat, item.lng], {
-                    radius: 10, fillColor: markerColor, color: '#fff', weight: 2, fillOpacity: 0.9
-                }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>速度：' + item.speed + ' km/h').openPopup();
-                map.setView([item.lat, item.lng], 16);
-            });
-            timelineEl.appendChild(div);
-        });
-
-        // Update stats
-        document.getElementById('totalRecords').textContent = timeline.length;
-        document.getElementById('totalPoints').textContent = timeline.length;
-        if (timeline.length > 0) {
-            document.getElementById('firstTime').textContent = timeline[0].time;
-            document.getElementById('lastTime').textContent = timeline[timeline.length - 1].time;
-        }
-
-        // Autoplay functionality
-        let playInterval = null;
-        let currentPlayIndex = 0;
-        let isPlaying = false;
-        const playBtn = document.getElementById('playBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const playSpeed = document.getElementById('playSpeed');
-        const currentIndexEl = document.getElementById('currentIndex');
-        const timelineItems = document.querySelectorAll('.timeline-item');
-
-        function showPoint(index) {
-            if (index < 0 || index >= timeline.length) return;
-
-            const item = timeline[index];
-            currentPlayIndex = index;
-            currentIndexEl.textContent = index + 1;
-
-            // Update timeline highlight
-            timelineItems.forEach(el => el.classList.remove('active'));
-            timelineItems[index].classList.add('active');
-            timelineItems[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            // Update map marker
-            if (currentMarker) map.removeLayer(currentMarker);
-            const markerColor = item.status === 'rest' ? '#f39c12' : (item.status === 'speed_anomaly' ? '#e74c3c' : '#3498db');
-            currentMarker = L.circleMarker([item.lat, item.lng], {
-                radius: 12, fillColor: markerColor, color: '#fff', weight: 3, fillOpacity: 0.9
-            }).addTo(map).bindPopup('<b>' + item.time + '</b><br>' + item.addr + '<br>速度：' + item.speed + ' km/h');
-
-            map.setView([item.lat, item.lng], 15);
-        }
-
-        function startPlayback() {
-            if (isPlaying) {
-                // Pause
-                clearInterval(playInterval);
-                isPlaying = false;
-                playBtn.textContent = '▶ 播放';
-                playBtn.classList.remove('playing');
-            } else {
-                // Play
-                isPlaying = true;
-                playBtn.textContent = '⏸ 暫停';
-                playBtn.classList.add('playing');
-
-                playInterval = setInterval(() => {
-                    if (currentPlayIndex >= timeline.length - 1) {
-                        stopPlayback();
-                        return;
-                    }
-                    showPoint(currentPlayIndex + 1);
-                }, parseInt(playSpeed.value));
-            }
-        }
-
-        function stopPlayback() {
-            clearInterval(playInterval);
-            isPlaying = false;
-            currentPlayIndex = 0;
-            currentIndexEl.textContent = 0;
-            playBtn.textContent = '▶ 播放';
-            playBtn.classList.remove('playing');
-            if (currentMarker) map.removeLayer(currentMarker);
-            timelineItems.forEach(el => el.classList.remove('active'));
-            map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
-        }
-
-        playBtn.addEventListener('click', startPlayback);
-        stopBtn.addEventListener('click', stopPlayback);
-
-        playSpeed.addEventListener('change', () => {
-            if (isPlaying) {
-                clearInterval(playInterval);
-                playInterval = setInterval(() => {
-                    if (currentPlayIndex >= timeline.length - 1) {
-                        stopPlayback();
-                        return;
-                    }
-                    showPoint(currentPlayIndex + 1);
-                }, parseInt(playSpeed.value));
-            }
-        });
-    </script>
-</body>
-</html>
-HTML;
+        return [
+            'date' => $dateFormatted,
+            'projectName' => $projectName,
+            'dotName' => $dotName,
+            'totalDistance' => round($totalDistance),
+            'totalDistanceKm' => round($totalDistance / 1000, 2),
+            'restCount' => count($restStops),
+            'anomalyCount' => count($speedAnomalies),
+            'center' => [
+                'lat' => $centerLat,
+                'lng' => $centerLng,
+            ],
+            'points' => $allPoints,
+            'timeline' => $timeline,
+            'restStops' => $restStops,
+            'speedAnomalies' => $speedAnomalies,
+            'segments' => $segments,
+        ];
     }
 }
 
 // Main execution
-$date = $argv[1] ?? date('Ymd');
 $builder = new SummaryBuilder();
-$builder->build($date);
+
+if (isset($argv[1])) {
+    if ($argv[1] === '--all') {
+        $builder->buildAll();
+    } elseif ($argv[1] === '--index') {
+        $builder->buildIndex();
+    } else {
+        $builder->build($argv[1]);
+        $builder->buildIndex();
+    }
+} else {
+    $builder->build(date('Ymd'));
+    $builder->buildIndex();
+}
