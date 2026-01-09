@@ -108,14 +108,14 @@ class SummaryBuilder
         $sourceDir = $this->docsDir . '/' . $dateFormatted;
 
         if (!is_dir($sourceDir)) {
-            echo "Error: Directory not found: {$sourceDir}\n";
+            echo "Skipping {$dateFormatted}: Directory not found\n";
             return;
         }
 
         $records = $this->loadRecords($sourceDir);
 
         if (empty($records)) {
-            echo "Error: No records found in {$sourceDir}\n";
+            echo "Skipping {$dateFormatted}: No records found\n";
             return;
         }
 
@@ -123,7 +123,7 @@ class SummaryBuilder
         $records = $this->filterContinuousRecords($records);
 
         if (empty($records)) {
-            echo "Error: No continuous records found in {$sourceDir}\n";
+            echo "Skipping {$dateFormatted}: No continuous records found\n";
             return;
         }
 
