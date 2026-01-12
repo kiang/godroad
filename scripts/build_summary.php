@@ -25,6 +25,9 @@ class SummaryBuilder
     // Minimum movement threshold (meters) - consecutive points below this are merged
     private const MIN_MOVEMENT_THRESHOLD = 10;
 
+    // Minimum total distance (meters) to include in index - dates below this are excluded
+    private const MIN_INDEX_DISTANCE = 1000;  // 1 km
+
     public function __construct()
     {
         $this->docsDir = dirname(__DIR__) . '/docs';
@@ -56,10 +59,18 @@ class SummaryBuilder
 
             if (file_exists($dataFile)) {
                 $data = json_decode(file_get_contents($dataFile), true);
+                $totalDistance = $data['totalDistance'] ?? 0;
+
+                // Skip entries with insufficient distance
+                if ($totalDistance < self::MIN_INDEX_DISTANCE) {
+                    echo "Excluding {$dateFormatted} from index: distance {$totalDistance}m < " . self::MIN_INDEX_DISTANCE . "m\n";
+                    continue;
+                }
+
                 $index[] = [
                     'date' => $dateFormatted,
                     'projectName' => $data['projectName'] ?? '',
-                    'totalDistance' => $data['totalDistance'] ?? 0,
+                    'totalDistance' => $totalDistance,
                     'recordCount' => count($data['timeline'] ?? []),
                 ];
             }
