@@ -11,6 +11,7 @@
 class SummaryBuilder
 {
     private string $docsDir;
+    private string $outputDir;
 
     // Speed thresholds (km/h)
     private const MAX_CYCLING_SPEED = 50;  // Above this is likely not cycling
@@ -31,6 +32,7 @@ class SummaryBuilder
     public function __construct()
     {
         $this->docsDir = dirname(__DIR__) . '/docs';
+        $this->outputDir = '/home/kiang/public_html/tainan.olc.tw/docs/p/fififans/data';
     }
 
     /**
@@ -55,7 +57,7 @@ class SummaryBuilder
 
         foreach ($dates as $date) {
             $dateFormatted = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2);
-            $dataFile = $this->docsDir . '/data/' . $dateFormatted . '.json';
+            $dataFile = $this->outputDir . '/' . $dateFormatted . '.json';
 
             if (file_exists($dataFile)) {
                 $data = json_decode(file_get_contents($dataFile), true);
@@ -79,7 +81,7 @@ class SummaryBuilder
         // Sort by date descending
         usort($index, fn($a, $b) => strcmp($b['date'], $a['date']));
 
-        $outputDir = $this->docsDir . '/data';
+        $outputDir = $this->outputDir;
         if (!is_dir($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
@@ -143,7 +145,7 @@ class SummaryBuilder
 
         $summaryData = $this->generateSummaryData($date, $dateFormatted, $records);
 
-        $outputDir = $this->docsDir . '/data';
+        $outputDir = $this->outputDir;
         if (!is_dir($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
