@@ -333,7 +333,14 @@ class SummaryBuilder
         $m2 = (int)substr($time2, 2, 2);
         $s2 = (int)substr($time2, 4, 2);
 
-        return ($h2 * 3600 + $m2 * 60 + $s2) - ($h1 * 3600 + $m1 * 60 + $s1);
+        $diff = ($h2 * 3600 + $m2 * 60 + $s2) - ($h1 * 3600 + $m1 * 60 + $s1);
+
+        // Handle midnight crossover
+        if ($diff < 0) {
+            $diff += 86400;
+        }
+
+        return $diff;
     }
 
     private function generateSummaryData(string $date, string $dateFormatted, array $records): array
@@ -437,8 +444,12 @@ class SummaryBuilder
         }
 
         // Calculate map center
-        $centerLat = array_sum(array_column($allPoints, 'lat')) / count($allPoints);
-        $centerLng = array_sum(array_column($allPoints, 'lng')) / count($allPoints);
+        $pointCount = count($allPoints);
+        if ($pointCount === 0) {
+            return [];
+        }
+        $centerLat = array_sum(array_column($allPoints, 'lat')) / $pointCount;
+        $centerLng = array_sum(array_column($allPoints, 'lng')) / $pointCount;
 
         // Calculate segments between start, rest stops, and end
         $segments = [];
