@@ -430,6 +430,7 @@ class SummaryBuilder
                     'lng' => $firstPoint['lng'],
                     'addr' => $record['data']['addr'] ?? '',
                     'power' => $record['data']['dot_Power'] ?? '',
+                    'gpsType' => $record['data']['gpsType'] ?? '',
                     'distance' => round($distance),
                     'speed' => round($speed, 1),
                     'status' => $status,
