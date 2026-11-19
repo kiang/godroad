@@ -198,8 +198,8 @@ body {
 <div class="page">
   <div class="hero">
     <div class="hero-kicker">2026 年 11 月 · 臺南市 37 區</div>
-    <h1>腳踏車掃街，<em>覆蓋率僅 5.1%</em></h1>
-    <p class="hero-sub">陳亭妃宣稱以腳踏車走訪臺南 37 個行政區。我們將 GPS 軌跡與臺南市門牌道路網比對，計算實際覆蓋率。結果顯示：11,669.6 公里的道路，花了 52 小時 56 分鐘只走過 304 公里。</p>
+    <h1>腳踏車掃街，<em>覆蓋率僅 4.5%</em></h1>
+    <p class="hero-sub">陳亭妃宣稱以腳踏車走訪臺南 37 個行政區。我們將 GPS 軌跡與臺南市門牌道路網比對，計算實際覆蓋率。結果顯示：11,669.6 公里的道路，花了 74 小時 32 分鐘只走過 402 公里。</p>
   </div>
   <div class="numbers">
     <div class="num-card">
@@ -209,26 +209,26 @@ body {
     </div>
     <div class="num-card">
       <div class="num-label">已覆蓋</div>
-      <div class="num-value">304.1<span class="unit">km</span></div>
+      <div class="num-value">401.6<span class="unit">km</span></div>
       <div class="num-note">2026-11 軌跡</div>
     </div>
     <div class="num-card">
       <div class="num-label">整體覆蓋率</div>
-      <div class="num-value critical">5.1<span class="unit">%</span></div>
+      <div class="num-value critical">4.5<span class="unit">%</span></div>
     </div>
     <div class="num-card">
       <div class="num-label">零覆蓋行政區</div>
-      <div class="num-value critical">23<span class="unit">/ 37</span></div>
+      <div class="num-value critical">10<span class="unit">/ 37</span></div>
       <div class="num-note">超過半數完全未到</div>
     </div>
     <div class="num-card">
       <div class="num-label">實際騎乘時間</div>
-      <div class="num-value">52<span class="unit">時</span> 56<span class="unit">分</span></div>
+      <div class="num-value">74<span class="unit">時</span> 32<span class="unit">分</span></div>
       <div class="num-note">排除停留間隔 &gt;10 分鐘</div>
     </div>
   </div>
   <div class="context">
-    臺南是全台面積最大的直轄市，光是計算門牌對應的路線就超過一萬公里。<strong>陳亭妃花了 52 小時 56 分鐘、騎了約 304 公里，整體覆蓋率僅 5.1%</strong>，其中 23 個行政區完全沒有軌跡紀錄。與其進行這樣低效且無感的掃街行程，不如站上電視辯論台，好好向所有臺南市民說清楚，要如何處理臺南眼前的各種爭議。
+    臺南是全台面積最大的直轄市，光是計算門牌對應的路線就超過一萬公里。<strong>陳亭妃花了 74 小時 32 分鐘、騎了約 402 公里，整體覆蓋率僅 4.5%</strong>，其中 10 個行政區完全沒有軌跡紀錄。與其進行這樣低效且無感的掃街行程，不如站上電視辯論台，好好向所有臺南市民說清楚，要如何處理臺南眼前的各種爭議。
   </div>
   <div class="section-head">
     <h2>各行政區覆蓋率</h2>
@@ -254,7 +254,7 @@ body {
   <div class="footer">
     <p>資料來源：臺南市門牌道路圖資（行政區路網長度）、GPS 巡查軌跡（2026 年 11 月）</p>
     <p>方法：以各行政區道路 LineString 建立凸包，將 GPS 軌跡以 15m 緩衝區與道路網交集，計算實際覆蓋長度。</p>
-    <p>報告產生時間：2026-11-15 09:41</p>
+    <p>報告產生時間：2026-11-20 06:57</p>
   </div>
 </div>
 <script>
@@ -269,22 +269,22 @@ var DATA = [
   {name:"下營區",road:237.3,covered:0.00,pct:0.0},
   {name:"六甲區",road:268.8,covered:0.00,pct:0.0},
   {name:"官田區",road:245.8,covered:0.00,pct:0.0},
-  {name:"大內區",road:144.3,covered:0.00,pct:0.0},
-  {name:"佳里區",road:354.5,covered:0.00,pct:0.0},
-  {name:"學甲區",road:232.9,covered:0.00,pct:0.0},
-  {name:"西港區",road:215.1,covered:0.00,pct:0.0},
-  {name:"七股區",road:267.4,covered:0.00,pct:0.0},
-  {name:"將軍區",road:235.0,covered:0.00,pct:0.0},
-  {name:"北門區",road:153.3,covered:0.00,pct:0.0},
-  {name:"新化區",road:320.4,covered:16.39,pct:5.1},
-  {name:"善化區",road:354.8,covered:0.00,pct:0.0},
-  {name:"新市區",road:321.5,covered:18.52,pct:5.8},
-  {name:"安定區",road:285.6,covered:14.63,pct:5.1},
-  {name:"山上區",road:95.8,covered:0.00,pct:0.0},
-  {name:"玉井區",road:222.5,covered:0.00,pct:0.0},
-  {name:"楠西區",road:156.6,covered:0.00,pct:0.0},
-  {name:"南化區",road:191.6,covered:0.00,pct:0.0},
-  {name:"左鎮區",road:149.6,covered:0.00,pct:0.0},
+  {name:"大內區",road:144.3,covered:0.45,pct:0.3},
+  {name:"佳里區",road:354.5,covered:13.84,pct:3.9},
+  {name:"學甲區",road:232.9,covered:0.29,pct:0.1},
+  {name:"西港區",road:215.1,covered:8.33,pct:3.9},
+  {name:"七股區",road:267.4,covered:7.39,pct:2.8},
+  {name:"將軍區",road:235.0,covered:14.94,pct:6.4},
+  {name:"北門區",road:153.3,covered:5.24,pct:3.4},
+  {name:"新化區",road:320.4,covered:16.63,pct:5.2},
+  {name:"善化區",road:354.8,covered:23.42,pct:6.6},
+  {name:"新市區",road:321.5,covered:18.79,pct:5.8},
+  {name:"安定區",road:285.6,covered:15.57,pct:5.5},
+  {name:"山上區",road:95.8,covered:9.10,pct:9.5},
+  {name:"玉井區",road:222.5,covered:5.20,pct:2.3},
+  {name:"楠西區",road:156.6,covered:3.41,pct:2.2},
+  {name:"南化區",road:191.6,covered:2.55,pct:1.3},
+  {name:"左鎮區",road:149.6,covered:1.91,pct:1.3},
   {name:"仁德區",road:506.1,covered:26.83,pct:5.3},
   {name:"歸仁區",road:485.1,covered:37.56,pct:7.8},
   {name:"關廟區",road:310.4,covered:16.66,pct:5.4},
