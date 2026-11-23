@@ -10,10 +10,14 @@ import json
 import glob
 import os
 import re
+import sys
 from datetime import datetime
 from shapely.geometry import shape, LineString
 from shapely.ops import unary_union
 import pyproj
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gps_loader import load_all_paths
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TAINAN_DIR = "/home/kiang/public_html/address/docs/output/tainan"
@@ -58,36 +62,6 @@ def load_district(geojson_path):
     name = os.path.basename(geojson_path).replace(".geojson", "")
     return polygon, total_km, name, multi
 
-
-def load_gps_paths(paths_glob):
-    all_paths = []
-    all_timestamps = []
-    date_dirs = sorted(glob.glob(paths_glob))
-    for date_dir in date_dirs:
-        if not os.path.isdir(date_dir):
-            continue
-        date_label = os.path.basename(date_dir)
-        for json_file in sorted(glob.glob(os.path.join(date_dir, "*.json"))):
-            try:
-                with open(json_file) as f:
-                    entries = json.load(f)
-                for entry in entries:
-                    gps_points = entry.get("GPS", [])
-                    if len(gps_points) >= 2:
-                        coords = [(p["lng"], p["lat"]) for p in gps_points
-                                  if p.get("lat") and p.get("lng")]
-                        if len(coords) >= 2:
-                            all_paths.append((coords, date_label))
-                    t = entry.get("gps_time")
-                    if t:
-                        try:
-                            all_timestamps.append(
-                                datetime.strptime(t, "%Y-%m-%d %H:%M:%S"))
-                        except ValueError:
-                            pass
-            except (json.JSONDecodeError, KeyError):
-                continue
-    return all_paths, all_timestamps
 
 
 def calculate_active_hours(timestamps):
@@ -496,7 +470,7 @@ def main():
     district_names = load_district_names(DATA_JS)
 
     print("Loading GPS paths from docs/2026-11*...")
-    gps_paths, timestamps = load_gps_paths(PATHS_GLOB)
+    gps_paths, timestamps = load_all_paths(PATHS_GLOB)
     active_hours, session_count = calculate_active_hours(timestamps)
     print(f"  Loaded {len(gps_paths)} GPS traces")
     print(f"  Active time: {active_hours:.1f} hours across {session_count} sessions\n")
