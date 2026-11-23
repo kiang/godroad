@@ -66,6 +66,7 @@ def load_gps_paths(paths_glob):
     for date_dir in date_dirs:
         if not os.path.isdir(date_dir):
             continue
+        date_label = os.path.basename(date_dir)
         for json_file in sorted(glob.glob(os.path.join(date_dir, "*.json"))):
             try:
                 with open(json_file) as f:
@@ -76,7 +77,7 @@ def load_gps_paths(paths_glob):
                         coords = [(p["lng"], p["lat"]) for p in gps_points
                                   if p.get("lat") and p.get("lng")]
                         if len(coords) >= 2:
-                            all_paths.append(coords)
+                            all_paths.append((coords, date_label))
                     t = entry.get("gps_time")
                     if t:
                         try:
@@ -123,25 +124,27 @@ def geom_length_m(geom):
 def calculate_coverage(polygon, road_lines, gps_paths):
     road_in_polygon = road_lines.intersection(polygon)
     if road_in_polygon.is_empty:
-        return 0.0, 0.0
+        return 0.0, 0.0, []
 
     gps_in_polygon = []
-    for coords in gps_paths:
+    dates_hit = set()
+    for coords, date_label in gps_paths:
         line = LineString(coords)
         if polygon.intersects(line):
             clipped = line.intersection(polygon)
             if not clipped.is_empty:
                 gps_in_polygon.append(clipped)
+                dates_hit.add(date_label)
 
     if not gps_in_polygon:
-        return 0.0, 0.0
+        return 0.0, 0.0, []
 
     gps_buffer = unary_union([g.buffer(0.000135) for g in gps_in_polygon])
     covered = road_in_polygon.intersection(gps_buffer)
 
     total_road_m = geom_length_m(road_in_polygon)
     covered_m = geom_length_m(covered)
-    return total_road_m, covered_m
+    return total_road_m, covered_m, sorted(dates_hit)
 
 
 def generate_html(results, total_traces, generated_at,
@@ -156,9 +159,11 @@ def generate_html(results, total_traces, generated_at,
 
     data_js_items = []
     for r in results:
+        dates_str = json.dumps(r["dates"], ensure_ascii=False)
         data_js_items.append(
             f'  {{name:"{r["name"]}",road:{r["total_road_km"]:.1f},'
-            f'covered:{r["covered_m"]/1000:.2f},pct:{r["coverage_pct"]:.1f}}}'
+            f'covered:{r["covered_m"]/1000:.2f},pct:{r["coverage_pct"]:.1f},'
+            f'dates:{dates_str}}}'
         )
     data_js = "[\n" + ",\n".join(data_js_items) + "\n]"
 
@@ -278,8 +283,13 @@ body {{
 .chart-container {{ margin-bottom: 40px; }}
 .bar-row {{
   display: grid; grid-template-columns: 72px 1fr 56px;
-  align-items: center; gap: 12px; padding: 5px 0;
+  align-items: center; gap: 12px; padding: 6px 0;
   border-bottom: 1px solid var(--gridline); position: relative;
+}}
+.bar-dates {{
+  grid-column: 2 / -1;
+  font-size: 0.7rem; color: var(--text-3);
+  line-height: 1.3; margin-top: -2px;
 }}
 .bar-row:last-child {{ border-bottom: none; }}
 .bar-row:hover {{ background: var(--accent-light); }}
@@ -338,6 +348,7 @@ body {{
   vertical-align: middle; overflow: hidden;
 }}
 .mini-fill {{ height: 100%; background: var(--accent); border-radius: 3px; }}
+.dates-cell {{ font-size: 0.7rem; color: var(--text-3); max-width: 180px; word-break: break-all; }}
 .footer {{
   padding-top: 32px; border-top: 1px solid var(--border);
   font-size: 0.75rem; color: var(--text-3); line-height: 1.6;
@@ -409,7 +420,7 @@ body {{
   <div style="overflow-x:auto">
     <table class="detail-table" id="detailTable">
       <thead>
-        <tr><th>行政區</th><th class="r">道路 (km)</th><th class="r">覆蓋 (km)</th><th class="r">覆蓋率</th><th></th></tr>
+        <tr><th>行政區</th><th class="r">道路 (km)</th><th class="r">覆蓋 (km)</th><th class="r">覆蓋率</th><th></th><th>涵蓋日期</th></tr>
       </thead>
       <tbody id="tableBody"></tbody>
       <tfoot id="tableFoot"></tfoot>
@@ -433,10 +444,12 @@ function renderBarChart() {{
     var row = document.createElement('div');
     row.className = 'bar-row';
     var w = (d.pct / chartScale * 100).toFixed(1);
+    var datesStr = d.dates.length ? d.dates.map(function(s){{ return s.slice(5); }}).join(', ') : '';
     row.innerHTML =
       '<div class="bar-name">' + d.name + '</div>' +
       '<div class="bar-track"><div class="bar-fill' + (d.pct === 0 ? ' zero' : '') + '" style="width:' + w + '%"></div></div>' +
       '<div class="bar-pct' + (d.pct === 0 ? ' zero' : '') + '">' + d.pct.toFixed(1) + '%</div>' +
+      (datesStr ? '<div class="bar-dates">' + datesStr + '</div>' : '') +
       '<div class="tooltip">' + d.name + '：道路 ' + d.road.toFixed(1) + ' km，覆蓋 ' + d.covered.toFixed(2) + ' km（' + d.pct.toFixed(1) + '%）</div>';
     el.appendChild(row);
   }});
@@ -452,17 +465,19 @@ function renderTable() {{
     totalCovered += d.covered;
     var z = d.pct === 0;
     var tr = document.createElement('tr');
+    var tdDates = d.dates.length ? d.dates.map(function(s){{ return s.slice(5); }}).join(', ') : '—';
     tr.innerHTML =
       '<td>' + d.name + '</td>' +
       '<td class="r">' + d.road.toFixed(1) + '</td>' +
       '<td class="r' + (z ? ' zero' : '') + '">' + d.covered.toFixed(2) + '</td>' +
       '<td class="r' + (z ? ' zero' : '') + '">' + d.pct.toFixed(1) + '%</td>' +
-      '<td><span class="mini-bar"><span class="mini-fill" style="width:' + (d.pct / chartScale * 100).toFixed(1) + '%"></span></span></td>';
+      '<td><span class="mini-bar"><span class="mini-fill" style="width:' + (d.pct / chartScale * 100).toFixed(1) + '%"></span></span></td>' +
+      '<td class="dates-cell' + (z ? ' zero' : '') + '">' + tdDates + '</td>';
     tbody.appendChild(tr);
   }});
   var overallPct = (totalCovered / totalRoad * 100);
   document.getElementById('tableFoot').innerHTML =
-    '<tr><td>合計</td><td class="r">' + totalRoad.toFixed(1) + '</td><td class="r">' + totalCovered.toFixed(2) + '</td><td class="r">' + overallPct.toFixed(1) + '%</td><td></td></tr>';
+    '<tr><td>合計</td><td class="r">' + totalRoad.toFixed(1) + '</td><td class="r">' + totalCovered.toFixed(2) + '</td><td class="r">' + overallPct.toFixed(1) + '%</td><td></td><td></td></tr>';
 }}
 document.getElementById('sortToggle').addEventListener('click', function() {{
   tableSortByPct = !tableSortByPct;
@@ -493,7 +508,8 @@ def main():
     for geojson_path in district_files:
         polygon, total_km, code, road_lines = load_district(geojson_path)
         cn_name = district_names.get(code, code)
-        total_road_m, covered_m = calculate_coverage(polygon, road_lines, gps_paths)
+        total_road_m, covered_m, dates = calculate_coverage(
+            polygon, road_lines, gps_paths)
 
         coverage_pct = (covered_m / total_road_m * 100) if total_road_m > 0 else 0
         results.append({
@@ -503,6 +519,7 @@ def main():
             "measured_road_m": total_road_m,
             "covered_m": covered_m,
             "coverage_pct": coverage_pct,
+            "dates": dates,
         })
 
         print(f"  {cn_name}({code}): road={total_km:.1f}km, "
