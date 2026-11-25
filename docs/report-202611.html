@@ -204,8 +204,8 @@ body {
 <div class="page">
   <div class="hero">
     <div class="hero-kicker">2026 年 11 月 · 臺南市 37 區</div>
-    <h1>腳踏車掃街，<em>覆蓋率僅 3.9%</em></h1>
-    <p class="hero-sub">陳亭妃宣稱以腳踏車走訪臺南 37 個行政區。我們將 GPS 軌跡與臺南市門牌道路網比對，計算實際覆蓋率。結果顯示：11,669.6 公里的道路，花了 83 小時 44 分鐘只走過 367 公里。</p>
+    <h1>腳踏車掃街，<em>覆蓋率僅 3.7%</em></h1>
+    <p class="hero-sub">陳亭妃宣稱以腳踏車走訪臺南 37 個行政區。我們將 GPS 軌跡與臺南市門牌道路網比對，計算實際覆蓋率。結果顯示：11,669.6 公里的道路，花了 94 小時 0 分鐘只走過 398 公里。</p>
   </div>
   <div class="numbers">
     <div class="num-card">
@@ -215,26 +215,26 @@ body {
     </div>
     <div class="num-card">
       <div class="num-label">已覆蓋</div>
-      <div class="num-value">367.1<span class="unit">km</span></div>
+      <div class="num-value">397.6<span class="unit">km</span></div>
       <div class="num-note">2026-11 軌跡</div>
     </div>
     <div class="num-card">
       <div class="num-label">整體覆蓋率</div>
-      <div class="num-value critical">3.9<span class="unit">%</span></div>
+      <div class="num-value critical">3.7<span class="unit">%</span></div>
     </div>
     <div class="num-card">
       <div class="num-label">零覆蓋行政區</div>
-      <div class="num-value critical">8<span class="unit">/ 37</span></div>
+      <div class="num-value critical">4<span class="unit">/ 37</span></div>
       <div class="num-note">超過半數完全未到</div>
     </div>
     <div class="num-card">
       <div class="num-label">實際騎乘時間</div>
-      <div class="num-value">83<span class="unit">時</span> 44<span class="unit">分</span></div>
+      <div class="num-value">94<span class="unit">時</span> 0<span class="unit">分</span></div>
       <div class="num-note">排除停留間隔 &gt;10 分鐘</div>
     </div>
   </div>
   <div class="context">
-    臺南是全台面積最大的直轄市，光是計算門牌對應的路線就超過一萬公里。<strong>陳亭妃花了 83 小時 44 分鐘、騎了約 367 公里，整體覆蓋率僅 3.9%</strong>，其中 8 個行政區完全沒有軌跡紀錄。與其進行這樣低效且無感的掃街行程，不如站上電視辯論台，好好向所有臺南市民說清楚，要如何處理臺南眼前的各種爭議。
+    臺南是全台面積最大的直轄市，光是計算門牌對應的路線就超過一萬公里。<strong>陳亭妃花了 94 小時 0 分鐘、騎了約 398 公里，整體覆蓋率僅 3.7%</strong>，其中 4 個行政區完全沒有軌跡紀錄。與其進行這樣低效且無感的掃街行程，不如站上電視辯論台，好好向所有臺南市民說清楚，要如何處理臺南眼前的各種爭議。
   </div>
   <div class="section-head">
     <h2>各行政區覆蓋率</h2>
@@ -260,22 +260,22 @@ body {
   <div class="footer">
     <p>資料來源：臺南市門牌道路圖資（行政區路網長度）、GPS 巡查軌跡（2026 年 11 月）</p>
     <p>方法：以各行政區道路 LineString 建立凸包，將 GPS 軌跡以 15m 緩衝區與道路網交集，計算實際覆蓋長度。</p>
-    <p>報告產生時間：2026-11-23 19:11</p>
+    <p>報告產生時間：2026-11-25 22:40</p>
   </div>
 </div>
 <script>
 var DATA = [
-  {name:"新營區",road:432.5,covered:0.00,pct:0.0,dates:[]},
+  {name:"新營區",road:432.5,covered:0.00,pct:0.0,dates:["2026-11-25"]},
   {name:"鹽水區",road:262.4,covered:0.00,pct:0.0,dates:[]},
   {name:"白河區",road:451.1,covered:0.00,pct:0.0,dates:[]},
-  {name:"柳營區",road:281.2,covered:0.00,pct:0.0,dates:[]},
+  {name:"柳營區",road:281.2,covered:7.43,pct:2.6,dates:["2026-11-25"]},
   {name:"後壁區",road:225.4,covered:0.00,pct:0.0,dates:[]},
-  {name:"東山區",road:247.9,covered:0.00,pct:0.0,dates:[]},
+  {name:"東山區",road:247.9,covered:8.45,pct:3.4,dates:["2026-11-25"]},
   {name:"麻豆區",road:325.5,covered:8.85,pct:2.7,dates:["2026-11-18", "2026-11-23"]},
-  {name:"下營區",road:237.3,covered:0.00,pct:0.0,dates:[]},
+  {name:"下營區",road:237.3,covered:10.48,pct:4.4,dates:["2026-11-24"]},
   {name:"六甲區",road:268.8,covered:8.93,pct:3.3,dates:["2026-11-23"]},
   {name:"官田區",road:245.8,covered:5.64,pct:2.3,dates:["2026-11-23"]},
-  {name:"大內區",road:144.3,covered:0.00,pct:0.0,dates:[]},
+  {name:"大內區",road:144.3,covered:4.12,pct:2.9,dates:["2026-11-24"]},
   {name:"佳里區",road:354.5,covered:13.32,pct:3.8,dates:["2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]},
   {name:"學甲區",road:232.9,covered:11.23,pct:4.8,dates:["2026-11-19", "2026-11-20"]},
   {name:"西港區",road:215.1,covered:7.69,pct:3.6,dates:["2026-11-17"]},
@@ -286,7 +286,7 @@ var DATA = [
   {name:"善化區",road:354.8,covered:15.88,pct:4.5,dates:["2026-11-16"]},
   {name:"新市區",road:321.5,covered:16.77,pct:5.2,dates:["2026-11-12"]},
   {name:"安定區",road:285.6,covered:11.97,pct:4.2,dates:["2026-11-11", "2026-11-12"]},
-  {name:"山上區",road:95.8,covered:7.45,pct:7.8,dates:["2026-11-16"]},
+  {name:"山上區",road:95.8,covered:7.45,pct:7.8,dates:["2026-11-16", "2026-11-24"]},
   {name:"玉井區",road:222.5,covered:4.52,pct:2.0,dates:["2026-11-17"]},
   {name:"楠西區",road:156.6,covered:3.66,pct:2.3,dates:["2026-11-17"]},
   {name:"南化區",road:191.6,covered:1.45,pct:0.8,dates:["2026-11-17"]},
